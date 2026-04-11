@@ -31,6 +31,26 @@ export default function SignIn() {
     setIsSubmitting(false);
   }
 
+  async function handleGoogleSignIn() {
+    if (!supabase) {
+      setError('Supabase is not configured. Add a valid URL and anon key to continue.');
+      return;
+    }
+
+    setError(null);
+
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: {
+        redirectTo: `${window.location.origin}/auth/callback`
+      }
+    });
+
+    if (error) {
+      setError(error.message);
+    }
+  }
+
   return (
     <div className="min-h-screen bg-pink-50 text-gray-800 font-sans p-4 flex flex-col items-center justify-center bg-cover bg-center" style={{backgroundImage: "url('/bg.jpg')"}}>
       <div className="w-full max-w-md glass-card p-8">
@@ -60,6 +80,12 @@ export default function SignIn() {
           className="w-full mt-4 btn-primary"
         >
           {isSubmitting ? 'Signing In...' : 'Sign In'}
+        </button>
+        <button
+          onClick={handleGoogleSignIn}
+          className="w-full mt-2 bg-white/80 text-gray-800 border border-gray-300 rounded-lg p-4 hover:bg-white/90 focus:ring-2 focus:ring-pink-400 focus:outline-none"
+        >
+          Sign in with Google
         </button>
         <p className="mt-4 text-center text-sm text-gray-600">
           Don&apos;t have an account?{' '}

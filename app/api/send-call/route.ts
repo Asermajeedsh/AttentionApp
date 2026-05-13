@@ -137,26 +137,29 @@ export async function POST(req: Request) {
       .maybeSingle()
 
     const subsClient = admin ?? supabase
-    const { data: subs, error: subError } = await subsClient
-      .from('push_subscriptions')
-      .select('id, subscription')
-      .eq('user_id', receiverId)
-      .order('last_seen_at', { ascending: false })
+    const { data: subs, error: subError } = admin
+      ? await admin
+          .from('push_subscriptions')
+          .select('id, subscription')
+          .eq('user_id', receiverId)
+          .order('last_seen_at', { ascending: false })
+      : await supabase.rpc('get_push_subscriptions_for_notification', { target_user_id: receiverId })
 
     if (subError || !subs || subs.length === 0) {
       return NextResponse.json({ ok: false, error: 'No push subscription for receiver' }, { status: 200 })
     }
 
     let prefs = defaultPrefs()
-    if (admin) {
-      const { data: prefRow } = await admin
-        .from('notification_preferences')
-        .select('mute_all,quiet_hours_enabled,quiet_start_minutes,quiet_end_minutes,timezone,notify_call,calls_bypass_quiet_hours')
-        .eq('user_id', receiverId)
-        .limit(1)
-        .maybeSingle()
-      if (prefRow) prefs = { ...prefs, ...(prefRow as any) }
-    }
+    const { data: prefRow } = admin
+      ? await admin
+          .from('notification_preferences')
+          .select('mute_all,quiet_hours_enabled,quiet_start_minutes,quiet_end_minutes,timezone,notify_call,calls_bypass_quiet_hours')
+          .eq('user_id', receiverId)
+          .limit(1)
+          .maybeSingle()
+      : await supabase.rpc('get_notification_preferences_for_notification', { target_user_id: receiverId })
+
+    if (prefRow) prefs = { ...prefs, ...(prefRow as any) }
 
     if (prefs.mute_all || !prefs.notify_call) {
       return NextResponse.json({ ok: true, sent: 0, removed: 0, suppressed: 'disabled' })
@@ -196,14 +199,25 @@ export async function POST(req: Request) {
             .from('push_subscriptions')
             .update({ last_seen_at: new Date().toISOString(), updated_at: new Date().toISOString() })
             .eq('id', row.id)
+        } else {
+          await supabase.rpc('touch_push_subscription_for_notification', {
+            target_user_id: receiverId,
+            subscription_id: row.id,
+          })
         }
         continue
       }
       const err: any = result.err
       const statusCode = err?.statusCode ?? null
       if (statusCode === 404 || statusCode === 410) {
-        const c = admin ?? supabase
-        await c.from('push_subscriptions').delete().eq('id', row.id)
+        if (admin) {
+          await admin.from('push_subscriptions').delete().eq('id', row.id)
+        } else {
+          await supabase.rpc('delete_push_subscription_for_notification', {
+            target_user_id: receiverId,
+            subscription_id: row.id,
+          })
+        }
         removed += 1
       }
     }

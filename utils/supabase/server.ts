@@ -7,25 +7,44 @@ function isValidUrl(value: string | undefined) {
   }
 
   try {
-    const url = new URL(value)
+    const raw = value.trim()
+    const unwrapped =
+      (raw.startsWith('`') && raw.endsWith('`')) ||
+      (raw.startsWith('"') && raw.endsWith('"')) ||
+      (raw.startsWith("'") && raw.endsWith("'"))
+        ? raw.slice(1, -1)
+        : raw
+    const normalized = unwrapped.includes('://') ? unwrapped : `https://${unwrapped}`
+    const url = new URL(normalized)
     return url.protocol === 'http:' || url.protocol === 'https:'
   } catch {
     return false
   }
 }
 
+function getSupabaseUrl() {
+  const direct = process.env.NEXT_PUBLIC_SUPABASE_URL
+  if (isValidUrl(direct)) {
+    return direct!.trim()
+  }
+
+  const ref = (process.env.NEXT_PUBLIC_SUPABASE_PROJECT_REF || '').trim()
+  if (ref) {
+    return `https://${ref}.supabase.co`
+  }
+
+  return ''
+}
+
 export function hasSupabaseServerEnv() {
-  return (
-    isValidUrl(process.env.NEXT_PUBLIC_SUPABASE_URL) &&
-    Boolean(process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY)
-  )
+  return isValidUrl(getSupabaseUrl()) && Boolean(process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY)
 }
 
 export function createClient() {
   const cookieStore = cookies()
 
   return createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    getSupabaseUrl(),
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
       cookies: {

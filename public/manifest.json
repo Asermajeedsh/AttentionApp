@@ -1,26 +1,47 @@
 {
-  "name": "Relationship Attention Tracker",
-  "short_name": "Attention Tracker",
-  "description": "Track your daily relationship attention levels",
-  "start_url": "/",
+  "name": "Attention App",
+  "short_name": "Attention",
+  "description": "A private couple communication PWA for beeps, chat, moods, calls, ratings, and games.",
+  "start_url": "/signin",
+  "scope": "/",
   "display": "standalone",
-  "background_color": "#0f172a",
-  "theme_color": "#0f172a",
+  "background_color": "#fff8f6",
+  "theme_color": "#fff8f6",
   "orientation": "portrait",
   "icons": [
     {
       "src": "/icon-192x192.png",
       "sizes": "192x192",
       "type": "image/png",
-      "purpose": "maskable any"
+      "purpose": "any maskable"
     },
     {
       "src": "/icon-512x512.png",
       "sizes": "512x512",
       "type": "image/png",
-      "purpose": "maskable any"
+      "purpose": "any maskable"
     }
   ],
-  "categories": ["lifestyle", "productivity"],
-  "lang": "en-US"
+  "shortcuts": [
+    {
+      "name": "Send Beep",
+      "short_name": "Beep",
+      "url": "/app",
+      "icons": [{ "src": "/icon-192x192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Chat",
+      "short_name": "Chat",
+      "url": "/chat",
+      "icons": [{ "src": "/icon-192x192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Games",
+      "short_name": "Games",
+      "url": "/games",
+      "icons": [{ "src": "/icon-192x192.png", "sizes": "192x192" }]
+    }
+  ],
+  "categories": ["lifestyle", "social"],
+  "lang": "en"
 }

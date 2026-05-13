@@ -1,16 +1,43 @@
-# React + Vite
+# Attention - Private Relationship App
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+A mobile-first, emotionally engaging web app for private connection between two people.
 
-Currently, two official plugins are available:
+## Features
+- **Beep**: Send a quick ping to your partner with a predefined message.
+- **Cooldown**: Only one beep every 30 minutes to keep it meaningful.
+- **Real-time**: Get notified instantly when your partner beeps you.
+- **Activity Feed**: View your history of connection.
+- **PWA Style**: Designed for mobile browsers.
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+## Setup
 
-## React Compiler
+### 1. Supabase Configuration
+- Create a Supabase project.
+- Run the SQL in `supabase/schema.sql` in the Supabase SQL Editor.
+- Enable Email Auth and disable "Confirm email" if you want instant signup (or leave it on for security).
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+### 2. Environment Variables
+Create a `.env.local` file with:
+```env
+NEXT_PUBLIC_SUPABASE_URL=your-project-url
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
+```
 
-## Expanding the ESLint configuration
+### 3. Allowed Users
+The app is restricted to two predefined emails. 
+Edit `app/signin/page.tsx` and `app/signup/page.tsx` to set your specific emails:
+```typescript
+const ALLOWED_EMAILS = ['me@example.com', 'partner@example.com'];
+```
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+### 4. Running the app
+```bash
+npm install
+npm run dev
+```
+
+## Tech Stack
+- Next.js (React)
+- Supabase (Auth, Postgres, Realtime)
+- Tailwind CSS
+- Lucide React Icons

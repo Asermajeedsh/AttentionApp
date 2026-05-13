@@ -1,721 +1,461 @@
 'use client';
 
-import { useEffect, useMemo, useState, type FormEvent } from 'react';
-import { BellRing, HeartHandshake, History, Link2, SendHorizontal, Sparkles } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Gamepad2, Heart, Loader2, MessageCircle, MoonStar, Sparkles } from 'lucide-react';
+import { createOptionalClient, sendBeep, fetchBeeps, fetchProfile, ensureProfile } from '../utils/supabase/client';
+import { useRouter } from 'next/navigation';
 import HeartIcon from './HeartIcon';
-import { createOptionalClient, hasSupabaseBrowserEnv } from '../utils/supabase/client';
 
-type Entry = {
-  id: number;
-  created_at: string;
-  compliments: number;
-  attention: number;
-  disrespect: number;
-  neglect: number;
-  loved: number;
-  comment: string;
-};
+const MESSAGES = ['I miss you', 'Thinking of you', 'Call me', 'Love you', 'Need cuddles'];
+const BEEP_COOLDOWN_MS = 5000;
 
-type Reflection = {
-  id: number;
-  createdAt: string;
-  title: string;
-  summary: string;
-  problems: string;
-  mood: string;
-};
-
-type AttentionAlert = {
-  id: number;
-  title: string;
-  message: string;
-  createdAt: string;
-};
-
-type PartnerProfile = {
-  yourName: string;
-  partnerName: string;
-  inviteCode: string;
-  linked: boolean;
-};
-
-type RatingCategory = {
-  id: keyof Omit<Entry, 'id' | 'created_at' | 'comment'>;
-  label: string;
-};
-
-const ratingCategories: RatingCategory[] = [
-  { id: 'compliments', label: 'Compliments' },
-  { id: 'attention', label: 'Attention' },
-  { id: 'disrespect', label: 'Disrespect' },
-  { id: 'neglect', label: 'Neglect' },
-  { id: 'loved', label: 'Loved' },
-];
-
-const moodOptions = ['Steady', 'Happy', 'Hopeful', 'Overwhelmed', 'Anxious', 'Low'];
-
-const defaultPartnerProfile: PartnerProfile = {
-  yourName: '',
-  partnerName: '',
-  inviteCode: 'ATTN-2026',
-  linked: false,
-};
-
-const starterReflections: Reflection[] = [
-  {
-    id: 1,
-    createdAt: new Date().toISOString(),
-    title: 'A softer start',
-    summary: 'Today felt busy, but I handled the morning better after slowing down.',
-    problems: 'Energy dipped after lunch and I felt more sensitive than usual.',
-    mood: 'Hopeful',
-  },
-];
-
-const starterAlerts: AttentionAlert[] = [
-  {
-    id: 1,
-    title: 'Partner attention',
-    message: 'Your latest attention ping will appear here for quick follow-up.',
-    createdAt: new Date().toISOString(),
-  },
-];
-
-const safeRead = <T,>(key: string, fallback: T): T => {
-  if (typeof window === 'undefined') {
-    return fallback;
-  }
-
-  try {
-    const item = window.localStorage.getItem(key);
-    return item ? (JSON.parse(item) as T) : fallback;
-  } catch {
-    return fallback;
-  }
-};
-
-export default function HomePageClient({ user }: { user: any }) {
-  const supabase = useMemo(() => createOptionalClient(), []);
-  const supabaseAvailable = hasSupabaseBrowserEnv();
-  const [ratings, setRatings] = useState({
-    compliments: 0,
-    attention: 0,
-    disrespect: 0,
-    neglect: 0,
-    loved: 0,
-  });
-  const [comment, setComment] = useState('');
-  const [history, setHistory] = useState<Entry[]>([]);
-  const [view, setView] = useState<'daily' | 'history'>('daily');
-  const [error, setError] = useState<string | null>(null);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isHydrated, setIsHydrated] = useState(false);
-  const [attentionSent, setAttentionSent] = useState(false);
-  const [partnerProfile, setPartnerProfile] = useState<PartnerProfile>(defaultPartnerProfile);
-  const [partnerForm, setPartnerForm] = useState<PartnerProfile>(defaultPartnerProfile);
-  const [attentionAlerts, setAttentionAlerts] = useState<AttentionAlert[]>(starterAlerts);
-  const [reflectionDraft, setReflectionDraft] = useState({
-    title: '',
-    summary: '',
-    problems: '',
-    mood: moodOptions[0],
-  });
-  const [reflections, setReflections] = useState<Reflection[]>(starterReflections);
-
+const HeartParticle = ({
+  x,
+  y,
+  kind,
+  size,
+  delayMs,
+  durationMs,
+  onComplete,
+}: {
+  x: number;
+  y: number;
+  kind: 'float' | 'rise';
+  size: number;
+  delayMs: number;
+  durationMs: number;
+  onComplete: () => void;
+}) => {
   useEffect(() => {
-    setPartnerProfile(safeRead('attention-app-partner', defaultPartnerProfile));
-    setPartnerForm(safeRead('attention-app-partner', defaultPartnerProfile));
-    setAttentionAlerts(safeRead('attention-app-alerts', starterAlerts));
-    setReflections(safeRead('attention-app-reflections', starterReflections));
-    setIsHydrated(true);
-  }, []);
-
-  useEffect(() => {
-    const fetchHistory = async () => {
-      if (!user || !supabase) {
-        setHistory([]);
-        return;
-      }
-
-      const { data, error: fetchError } = await supabase
-        .from('entries')
-        .select('*')
-        .eq('user_id', user.id)
-        .order('created_at', { ascending: false });
-
-      if (fetchError) {
-        setError('Could not fetch your history.');
-        return;
-      }
-
-      setHistory(data ?? []);
-    };
-
-    fetchHistory();
-  }, [supabase, user]);
-
-  useEffect(() => {
-    if (!isHydrated) {
-      return;
-    }
-
-    window.localStorage.setItem('attention-app-partner', JSON.stringify(partnerProfile));
-  }, [isHydrated, partnerProfile]);
-
-  useEffect(() => {
-    if (!isHydrated) {
-      return;
-    }
-
-    window.localStorage.setItem('attention-app-alerts', JSON.stringify(attentionAlerts));
-  }, [attentionAlerts, isHydrated]);
-
-  useEffect(() => {
-    if (!isHydrated) {
-      return;
-    }
-
-    window.localStorage.setItem('attention-app-reflections', JSON.stringify(reflections));
-  }, [isHydrated, reflections]);
-
-  const activeMood = useMemo(() => {
-    return reflectionDraft.mood || reflections[0]?.mood || moodOptions[0];
-  }, [reflectionDraft.mood, reflections]);
-
-  async function handleSubmit() {
-    setIsSubmitting(true);
-    setError(null);
-
-    const today = new Date().toISOString().split('T')[0];
-    const hasSubmittedToday = history.some(
-      (entry) => new Date(entry.created_at).toISOString().split('T')[0] === today
-    );
-
-    if (hasSubmittedToday) {
-      setError('You have already submitted an entry for today.');
-      setIsSubmitting(false);
-      return;
-    }
-
-    if (!user || !supabase) {
-      setError('You must be logged in to save an entry.');
-      setIsSubmitting(false);
-      return;
-    }
-
-    const newEntry = {
-      user_id: user.id,
-      ...ratings,
-      comment,
-    };
-
-    try {
-      const { data, error: insertError } = await supabase.from('entries').insert([newEntry]).select();
-
-      if (insertError) {
-        throw insertError;
-      }
-
-      setHistory((current) => [data[0], ...current]);
-      setComment('');
-      setRatings({
-        compliments: 0,
-        attention: 0,
-        disrespect: 0,
-        neglect: 0,
-        loved: 0,
-      });
-      setView('history');
-    } catch {
-      setError('Failed to save your entry. Please try again.');
-    }
-
-    setIsSubmitting(false);
-  }
-
-  const handlePartnerLink = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    const nextProfile = {
-      yourName: partnerForm.yourName.trim() || 'You',
-      partnerName: partnerForm.partnerName.trim() || 'Partner',
-      inviteCode: partnerForm.inviteCode.trim() || 'ATTN-2026',
-      linked: true,
-    };
-
-    setPartnerProfile(nextProfile);
-    setPartnerForm(nextProfile);
-  };
-
-  const handleAttentionPing = async () => {
-    const sender = partnerProfile.yourName || user?.email?.split('@')[0] || 'You';
-    const receiver = partnerProfile.partnerName || 'your partner';
-
-    const nextAlert = {
-      id: Date.now(),
-      title: `${sender} pinged ${receiver}`,
-      message: 'Attention button pressed. Open the app for a quick check-in.',
-      createdAt: new Date().toISOString(),
-    };
-
-    setAttentionAlerts((current) => [nextAlert, ...current]);
-    setAttentionSent(true);
-    window.setTimeout(() => setAttentionSent(false), 2200);
-
-    if (typeof window !== 'undefined' && 'Notification' in window) {
-      if (Notification.permission === 'default') {
-        await Notification.requestPermission();
-      }
-
-      if (Notification.permission === 'granted') {
-        new Notification('Attention Button', {
-          body: `${sender} sent a quick attention ping for ${receiver}.`,
-        });
-      }
-    }
-  };
-
-  const handleReflectionSubmit = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-
-    if (!reflectionDraft.summary.trim()) {
-      return;
-    }
-
-    const nextReflection = {
-      id: Date.now(),
-      createdAt: new Date().toISOString(),
-      title: reflectionDraft.title.trim() || 'Daily check-in',
-      summary: reflectionDraft.summary.trim(),
-      problems: reflectionDraft.problems.trim() || 'No blockers shared today.',
-      mood: reflectionDraft.mood,
-    };
-
-    setReflections((current) => [nextReflection, ...current]);
-    setAttentionAlerts((current) => [
-      {
-        id: Date.now() + 1,
-        title: 'Daily update shared',
-        message: `${partnerProfile.partnerName || 'Your partner'} can see your latest mood and notes.`,
-        createdAt: new Date().toISOString(),
-      },
-      ...current,
-    ]);
-    setReflectionDraft({
-      title: '',
-      summary: '',
-      problems: '',
-      mood: moodOptions[0],
-    });
-  };
-
-  const HeartRating = ({ category, label }: { category: keyof typeof ratings; label: string }) => (
-    <div className="rounded-3xl border border-white/60 bg-white/70 p-5 shadow-sm shadow-rose-100/50">
-      <div className="mb-4 flex items-center justify-between gap-3">
-        <h3 className="text-base font-semibold text-rose-950 sm:text-lg">{label}</h3>
-        <span className="rounded-full bg-rose-100 px-3 py-1 text-xs font-semibold text-rose-700">
-          {ratings[category]}/5
-        </span>
-      </div>
-      <div className="flex flex-wrap justify-center gap-1 sm:gap-2">
-        {[1, 2, 3, 4, 5].map((heart) => (
-          <button
-            key={heart}
-            type="button"
-            onClick={() => setRatings((prev) => ({ ...prev, [category]: heart }))}
-            className={`rounded-full p-2 transition-transform duration-200 hover:scale-105 ${
-              ratings[category] >= heart ? 'text-rose-500 animate-glow' : 'text-rose-200 hover:text-rose-300'
-            }`}
-            aria-label={`Set ${label} to ${heart}`}
-          >
-            <HeartIcon className="h-9 w-9 sm:h-10 sm:w-10" fill={ratings[category] >= heart ? 'currentColor' : 'none'} />
-          </button>
-        ))}
-      </div>
-    </div>
-  );
+    const timer = setTimeout(onComplete, delayMs + durationMs + 60);
+    return () => clearTimeout(timer);
+  }, [delayMs, durationMs, onComplete]);
 
   return (
     <div
-      className="min-h-screen bg-[#fff7f2] bg-cover bg-center px-4 py-5 text-stone-800 sm:px-6 lg:px-8"
-      style={{ backgroundImage: "linear-gradient(rgba(255,247,242,0.82), rgba(255,240,235,0.94)), url('/bg.jpg')" }}
+      className={`fixed pointer-events-none z-50 ${kind === 'rise' ? 'animate-heart-rise' : 'animate-heart-float'} text-rose-400`}
+      style={{
+        left: x,
+        top: y,
+        ['--delay' as never]: `${delayMs}ms`,
+        ['--dur' as never]: `${durationMs}ms`,
+        ['--x0' as never]: '0px',
+        ['--x1' as never]: `${Math.round((Math.random() - 0.5) * 120)}px`,
+      }}
     >
-      <div className="mx-auto flex w-full max-w-7xl flex-col gap-6">
-        <header className="glass-card flex flex-col gap-5 px-5 py-6 sm:px-7 lg:flex-row lg:items-center lg:justify-between">
-          <div className="space-y-3">
-            <p className="text-xs font-bold uppercase tracking-[0.32em] text-rose-500">Mobile interface enabled</p>
+      <Heart fill="currentColor" size={size} />
+    </div>
+  );
+};
+
+function urlBase64ToUint8Array(base64String: string) {
+  const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
+  const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+  const rawData = window.atob(base64);
+  const outputArray = new Uint8Array(rawData.length);
+  for (let i = 0; i < rawData.length; ++i) outputArray[i] = rawData.charCodeAt(i);
+  return outputArray;
+}
+
+function formatInteraction(beep: any, authUserId?: string) {
+  if (!beep) return 'No shared moments yet';
+  const who = beep.sender_id === authUserId ? 'You sent' : 'You received';
+  const time = new Date(beep.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  return `${who} "${beep.message}" at ${time}`;
+}
+
+export default function HomePageClient({ user: authUser }: { user: any }) {
+  const router = useRouter();
+  const supabase = useMemo(() => createOptionalClient(), []);
+
+  const [userProfile, setUserProfile] = useState<any>(null);
+  const [partnerProfile, setPartnerProfile] = useState<any>(null);
+  const [beeps, setBeeps] = useState<any[]>([]);
+  const [selectedMessage, setSelectedMessage] = useState(MESSAGES[0]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isBeeping, setIsBeeping] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [pushPermission, setPushPermission] = useState<NotificationPermission | 'unsupported'>('default');
+  const [isEnablingPush, setIsEnablingPush] = useState(false);
+  const [showHeartPulse, setShowHeartPulse] = useState(false);
+  const [lastBeep, setLastBeep] = useState<any>(null);
+  const [lastSuccessAt, setLastSuccessAt] = useState<string | null>(null);
+  const [nextAllowedAt, setNextAllowedAt] = useState(0);
+  const [cooldownLeft, setCooldownLeft] = useState(0);
+  const [particles, setParticles] = useState<{ id: number; x: number; y: number; kind: 'float' | 'rise'; size: number; delayMs: number; durationMs: number }[]>([]);
+  const [justConnected, setJustConnected] = useState(false);
+
+  const beepSoundRef = useRef<HTMLAudioElement | null>(null);
+
+  useEffect(() => {
+    if (!nextAllowedAt) return;
+    const update = () => setCooldownLeft(Math.max(0, nextAllowedAt - Date.now()));
+    update();
+    const timer = window.setInterval(update, 250);
+    return () => window.clearInterval(timer);
+  }, [nextAllowedAt]);
+
+  const addParticle = useCallback((payload?: Partial<{ x: number; y: number; kind: 'float' | 'rise'; size: number; delayMs: number; durationMs: number }>) => {
+    const id = Date.now() + Math.floor(Math.random() * 10000);
+    const x = payload?.x ?? window.innerWidth / 2 + (Math.random() - 0.5) * 90;
+    const y = payload?.y ?? window.innerHeight / 2;
+    setParticles((prev) => [
+      ...prev,
+      {
+        id,
+        x,
+        y,
+        kind: payload?.kind ?? 'float',
+        size: payload?.size ?? 22,
+        delayMs: payload?.delayMs ?? 0,
+        durationMs: payload?.durationMs ?? 2800,
+      },
+    ]);
+  }, []);
+
+  const registerPush = useCallback(
+    async (options: { requestPermission: boolean }) => {
+      if (!supabase || !authUser) return;
+      if (!('serviceWorker' in navigator) || !('PushManager' in window) || !('Notification' in window)) {
+        setPushPermission('unsupported');
+        return;
+      }
+
+      const vapidPublicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
+      if (!vapidPublicKey) return;
+
+      if (options.requestPermission && Notification.permission !== 'granted') {
+        const permission = await Notification.requestPermission();
+        setPushPermission(permission);
+        if (permission !== 'granted') return;
+      } else {
+        setPushPermission(Notification.permission);
+        if (Notification.permission !== 'granted') return;
+      }
+
+      const registration = await navigator.serviceWorker.ready;
+      const existing = await registration.pushManager.getSubscription();
+      const subscription =
+        existing ??
+        (await registration.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: urlBase64ToUint8Array(vapidPublicKey),
+        }));
+
+      const subscriptionJson = typeof (subscription as any)?.toJSON === 'function' ? (subscription as any).toJSON() : subscription;
+
+      const endpoint = (subscription as any)?.endpoint as string | undefined
+      if (!endpoint) return
+
+      await supabase.from('push_subscriptions').upsert(
+        [
+          {
+            user_id: authUser.id,
+            endpoint,
+            subscription: subscriptionJson,
+            user_agent: navigator.userAgent,
+            updated_at: new Date().toISOString(),
+            last_seen_at: new Date().toISOString(),
+          },
+        ],
+        { onConflict: 'user_id,endpoint' }
+      )
+    },
+    [authUser, supabase]
+  );
+
+  useEffect(() => {
+    if (!supabase || !authUser || !('Notification' in window)) return;
+    if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
+      setPushPermission('unsupported');
+      return;
+    }
+    setPushPermission(Notification.permission);
+    if (Notification.permission === 'granted') registerPush({ requestPermission: false }).catch(() => {});
+  }, [authUser, registerPush, supabase]);
+
+  const triggerIncomingBeepEffect = useCallback(() => {
+    setShowHeartPulse(true);
+    for (let i = 0; i < 5; i++) setTimeout(() => addParticle({ kind: 'float', size: 20 + i }), i * 140);
+    beepSoundRef.current?.play().catch(() => {});
+    setTimeout(() => setShowHeartPulse(false), 2200);
+  }, [addParticle]);
+
+  const triggerConnectedEffect = useCallback(() => {
+    setJustConnected(true);
+    const width = window.innerWidth;
+    const height = window.innerHeight;
+    for (let i = 0; i < 22; i++) {
+      addParticle({
+        kind: 'rise',
+        x: Math.random() * width,
+        y: height + 30 + Math.random() * 80,
+        size: 12 + Math.round(Math.random() * 16),
+        delayMs: i * 40,
+        durationMs: 2200 + Math.round(Math.random() * 1200),
+      });
+    }
+    setTimeout(() => setJustConnected(false), 2400);
+  }, [addParticle]);
+
+  useEffect(() => {
+    async function init() {
+      if (!authUser) {
+        setIsLoading(false);
+        router.push('/signin');
+        return;
+      }
+
+      if (!supabase) {
+        setError('Supabase is not configured. Check your env vars.');
+        setIsLoading(false);
+        return;
+      }
+
+      try {
+        const me = await ensureProfile(authUser);
+        setUserProfile(me);
+
+        const partnerId = me?.partner_id ?? null;
+        const [partner, beepsData] = await Promise.all([
+          partnerId ? fetchProfile(partnerId) : Promise.resolve(null),
+          fetchBeeps(),
+        ]);
+
+        setPartnerProfile(partner);
+        setBeeps(beepsData);
+        setLastBeep(beepsData[0] ?? null);
+
+      } catch (err: any) {
+        setError(err?.message || 'Connection lost. Please refresh.');
+      } finally {
+        setIsLoading(false);
+      }
+    }
+
+    init();
+  }, [authUser, router, supabase, triggerConnectedEffect]);
+
+  useEffect(() => {
+    if (!supabase || !authUser) return;
+    const channel = supabase
+      .channel('beeps-changes')
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'beeps' }, (payload) => {
+        const newBeep = payload.new;
+        setBeeps((prev) => [newBeep, ...prev]);
+        setLastBeep(newBeep);
+        if (newBeep.receiver_id === authUser.id) triggerIncomingBeepEffect();
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [supabase, authUser, triggerIncomingBeepEffect]);
+
+  const handleBeep = async () => {
+    if (isBeeping || cooldownLeft > 0 || !partnerProfile) return;
+    setIsBeeping(true);
+    setError(null);
+    try {
+      await sendBeep(selectedMessage);
+      setLastSuccessAt(new Date().toISOString());
+      setNextAllowedAt(Date.now() + BEEP_COOLDOWN_MS);
+      setShowHeartPulse(true);
+      for (let i = 0; i < 4; i++) setTimeout(() => addParticle({ kind: 'float', size: 22 + i * 2 }), i * 100);
+      setTimeout(() => setShowHeartPulse(false), 1600);
+    } catch (err: any) {
+      setError(err?.message || 'Could not send your beep.');
+    } finally {
+      setIsBeeping(false);
+    }
+  };
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-mesh flex items-center justify-center px-6">
+        <div className="glass-card w-full max-w-sm p-8 text-center">
+          <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-[24px] bg-white/70 shadow-lg shadow-rose-100/40">
+            <Loader2 className="h-7 w-7 animate-spin text-rose-400" />
+          </div>
+          <p className="text-base font-semibold text-stone-700">Waking up your cozy little corner...</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="app-shell bg-mesh">
+      {particles.map((p) => (
+        <HeartParticle key={p.id} {...p} onComplete={() => setParticles((prev) => prev.filter((item) => item.id !== p.id))} />
+      ))}
+
+      <audio ref={beepSoundRef} src="/beep.mp3" preload="auto" />
+
+      <div className="pointer-events-none absolute inset-0 overflow-hidden">
+        <div className="absolute -left-12 top-10 h-32 w-32 rounded-full bg-rose-200/50 blur-3xl" />
+        <div className="absolute right-0 top-24 h-40 w-40 rounded-full bg-fuchsia-200/40 blur-3xl" />
+        <div className="absolute bottom-24 left-1/3 h-36 w-36 rounded-full bg-amber-100/50 blur-3xl" />
+      </div>
+
+      {justConnected && (
+        <div className="fixed inset-x-0 top-5 z-40 flex justify-center px-4">
+          <div className="glass-card animate-pop-in px-5 py-3 text-sm font-semibold text-rose-500">You&apos;re linked and ready for little moments.</div>
+        </div>
+      )}
+
+      <main className="relative flex-1 overflow-y-auto px-5 pb-[calc(env(safe-area-inset-bottom)+110px)] pt-[calc(env(safe-area-inset-top)+20px)] no-scrollbar">
+        <section className="glass-card p-6">
+          <div className="flex items-start justify-between gap-4">
             <div>
-              <h1 className="font-serif text-3xl font-bold text-rose-950 sm:text-4xl">Attention App</h1>
-              <p className="mt-2 max-w-2xl text-sm text-stone-600 sm:text-base">
-                Link partners, send attention pings, and share a fuller update about your day, your problems, and your mood swings.
+              <p className="text-[11px] font-bold uppercase tracking-[0.28em] text-rose-300">Dashboard</p>
+              <h1 className="mt-2 text-[30px] font-extrabold leading-tight text-gradient">You &amp; Your Partner 💖</h1>
+              <p className="mt-2 text-sm font-medium text-stone-600">
+                {partnerProfile ? `Linked with ${partnerProfile?.name || 'your partner'}` : 'Waiting for your partner to join the app'}
               </p>
+            </div>
+            <div className="glass-button flex h-14 w-14 items-center justify-center rounded-[22px] text-rose-400">
+              <HeartIcon className="h-7 w-7" fill="currentColor" />
             </div>
           </div>
 
-          <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-end">
-            {user ? (
-              <>
-                <div className="rounded-2xl bg-white/75 px-4 py-3 text-sm text-rose-900 shadow-sm">
-                  {user.email}
-                </div>
-                <button
-                  onClick={async () => {
-                    if (supabase) {
-                      await supabase.auth.signOut();
-                      window.location.reload();
-                    }
-                  }}
-                  className="btn-secondary"
-                >
-                  Sign Out
-                </button>
-              </>
-            ) : (
-              <div className="flex gap-3">
-                <a href="/signin" className="btn-secondary">
-                  Sign In
-                </a>
-                <a href="/signup" className="btn-primary">
-                  Sign Up
-                </a>
-              </div>
-            )}
-          </div>
-        </header>
-
-        {!supabaseAvailable && (
-          <section className="glass-card border border-amber-200 bg-amber-50/90 p-4 text-sm text-amber-900">
-            Supabase is not fully configured in `.env.local`, so auth and cloud history are temporarily unavailable. The new partner mode, attention button, and daily updates still work locally on this device.
-          </section>
-        )}
-
-        <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          <div className="glass-card p-5">
-            <p className="text-xs font-bold uppercase tracking-[0.24em] text-rose-500">Partner mode</p>
-            <h2 className="mt-3 text-2xl font-semibold text-rose-950">{partnerProfile.linked ? 'Linked' : 'Ready'}</h2>
-            <p className="mt-2 text-sm text-stone-600">
-              {partnerProfile.linked
-                ? `${partnerProfile.yourName} and ${partnerProfile.partnerName} are connected.`
-                : 'Create a pair and keep one-tap support within reach.'}
-            </p>
-          </div>
-          <div className="glass-card p-5">
-            <p className="text-xs font-bold uppercase tracking-[0.24em] text-rose-500">Attention button</p>
-            <h2 className="mt-3 text-2xl font-semibold text-rose-950">{attentionAlerts.length}</h2>
-            <p className="mt-2 text-sm text-stone-600">Recent pings and check-in prompts saved on this device.</p>
-          </div>
-          <div className="glass-card p-5">
-            <p className="text-xs font-bold uppercase tracking-[0.24em] text-rose-500">Daily reflections</p>
-            <h2 className="mt-3 text-2xl font-semibold text-rose-950">{reflections.length}</h2>
-            <p className="mt-2 text-sm text-stone-600">A dedicated space for day updates, problems, and emotional swings.</p>
-          </div>
-          <div className="glass-card p-5">
-            <p className="text-xs font-bold uppercase tracking-[0.24em] text-rose-500">Current mood</p>
-            <h2 className="mt-3 text-2xl font-semibold text-rose-950">{activeMood}</h2>
-            <p className="mt-2 text-sm text-stone-600">The latest mood badge stays visible for quick context.</p>
+          <div className="mt-5 rounded-[24px] border border-white/80 bg-white/55 p-4">
+            <p className="text-[11px] font-bold uppercase tracking-[0.26em] text-stone-400">Last interaction</p>
+            <p className="mt-2 text-sm font-semibold leading-6 text-stone-700">{formatInteraction(lastBeep, authUser?.id)}</p>
+            {lastSuccessAt && <p className="mt-2 text-xs font-semibold text-emerald-500">Beep sent successfully at {new Date(lastSuccessAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>}
           </div>
         </section>
 
-        <main className="grid gap-6 xl:grid-cols-[1.05fr_0.95fr]">
-          <section className="space-y-6">
-            <div className="glass-card p-5 sm:p-6">
-              <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                <div>
-                  <div className="flex items-center gap-2 text-rose-500">
-                    <Link2 size={18} />
-                    <p className="text-sm font-semibold uppercase tracking-[0.22em]">Partner mode</p>
-                  </div>
-                  <h2 className="mt-2 text-2xl font-semibold text-rose-950">Link your partner</h2>
-                </div>
-                <span className={`rounded-full px-4 py-2 text-sm font-semibold ${partnerProfile.linked ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'}`}>
-                  {partnerProfile.linked ? 'Connected' : 'Not linked'}
-                </span>
+        {pushPermission !== 'unsupported' && pushPermission !== 'granted' && (
+          <section className="glass-card mt-4 p-5">
+            <div className="flex items-start gap-3">
+              <div className="flex h-11 w-11 items-center justify-center rounded-[18px] bg-rose-100 text-rose-500">
+                <Sparkles size={18} />
               </div>
-
-              <form onSubmit={handlePartnerLink} className="grid gap-4 md:grid-cols-2">
-                <label className="space-y-2 text-sm font-medium text-stone-700">
-                  Your name
-                  <input
-                    value={partnerForm.yourName}
-                    onChange={(event) => setPartnerForm((current) => ({ ...current, yourName: event.target.value }))}
-                    className="w-full rounded-2xl border border-rose-200 bg-white/80 px-4 py-3 outline-none transition focus:border-rose-400"
-                    placeholder="Your name"
-                  />
-                </label>
-                <label className="space-y-2 text-sm font-medium text-stone-700">
-                  Partner name
-                  <input
-                    value={partnerForm.partnerName}
-                    onChange={(event) => setPartnerForm((current) => ({ ...current, partnerName: event.target.value }))}
-                    className="w-full rounded-2xl border border-rose-200 bg-white/80 px-4 py-3 outline-none transition focus:border-rose-400"
-                    placeholder="Partner name"
-                  />
-                </label>
-                <label className="space-y-2 text-sm font-medium text-stone-700 md:col-span-2">
-                  Invite code
-                  <input
-                    value={partnerForm.inviteCode}
-                    onChange={(event) => setPartnerForm((current) => ({ ...current, inviteCode: event.target.value }))}
-                    className="w-full rounded-2xl border border-rose-200 bg-white/80 px-4 py-3 outline-none transition focus:border-rose-400"
-                    placeholder="ATTN-2026"
-                  />
-                </label>
-                <button type="submit" className="btn-primary md:col-span-2">
-                  Enable Partner Mode
-                </button>
-              </form>
-
-              <div className="mt-5 rounded-[28px] border border-white/70 bg-gradient-to-r from-rose-100/80 to-orange-100/70 p-5">
-                <p className="text-xs font-bold uppercase tracking-[0.24em] text-rose-500">Linked pair</p>
-                <h3 className="mt-2 text-xl font-semibold text-rose-950">
-                  {(partnerProfile.yourName || 'You')} + {(partnerProfile.partnerName || 'Partner')}
-                </h3>
-                <p className="mt-2 text-sm text-stone-600">Invite code: {partnerProfile.inviteCode || 'ATTN-2026'}</p>
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-bold text-stone-800">Turn on love taps</p>
+                <p className="mt-1 text-xs font-medium leading-5 text-stone-600">
+                  Let beeps land on the lock screen so the app feels instant.
+                </p>
               </div>
             </div>
-
-            <div className="glass-card p-5 sm:p-6">
-              <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                <div>
-                  <div className="flex items-center gap-2 text-rose-500">
-                    <BellRing size={18} />
-                    <p className="text-sm font-semibold uppercase tracking-[0.22em]">Attention button</p>
-                  </div>
-                  <h2 className="mt-2 text-2xl font-semibold text-rose-950">Send a quick beep</h2>
-                </div>
-                <span className="rounded-full bg-white/80 px-4 py-2 text-sm font-semibold text-rose-700">Push-style preview</span>
-              </div>
-
-              <p className="text-sm text-stone-600">
-                Trigger a lightweight attention prompt and surface it immediately as an in-app alert with an optional browser notification.
-              </p>
-
-              <button
-                type="button"
-                onClick={handleAttentionPing}
-                className={`mt-5 flex w-full items-center justify-center gap-3 rounded-[28px] px-5 py-5 text-lg font-semibold text-white shadow-lg transition ${
-                  attentionSent ? 'bg-emerald-500 shadow-emerald-200' : 'bg-gradient-to-r from-rose-500 to-orange-500 shadow-rose-200'
-                }`}
-              >
-                <SendHorizontal size={20} />
-                {attentionSent ? 'Attention sent' : `Beep ${partnerProfile.partnerName || 'partner'}`}
-              </button>
-
-              <div className="mx-auto mt-6 max-w-sm rounded-[32px] bg-stone-950 p-4 shadow-2xl shadow-stone-300/40">
-                <div className="mx-auto mb-4 h-5 w-28 rounded-full bg-white/10" />
-                <div className="rounded-[24px] bg-white p-5">
-                  <p className="text-xs font-bold uppercase tracking-[0.24em] text-rose-500">Partner notification</p>
-                  <h3 className="mt-2 text-xl font-semibold text-stone-900">
-                    {(partnerProfile.yourName || 'Your partner')} needs your attention
-                  </h3>
-                  <p className="mt-2 text-sm text-stone-600">
-                    Tap to open Attention App and respond with a message or check-in.
-                  </p>
-                </div>
-              </div>
-            </div>
+            <button
+              onClick={async () => {
+                if (isEnablingPush) return;
+                setIsEnablingPush(true);
+                try {
+                  await registerPush({ requestPermission: true });
+                } catch {
+                  setError('Notifications could not be enabled right now.');
+                } finally {
+                  setIsEnablingPush(false);
+                }
+              }}
+              disabled={isEnablingPush}
+              className="primary-romance mt-4 flex w-full items-center justify-center gap-2 rounded-[22px] px-5 py-4 text-sm font-bold active:scale-[0.98] disabled:opacity-60"
+            >
+              {isEnablingPush ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Enable notifications'}
+            </button>
           </section>
+        )}
 
-          <section className="space-y-6">
-            <div className="glass-card p-5 sm:p-6">
-              <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                <div>
-                  <div className="flex items-center gap-2 text-rose-500">
-                    <HeartHandshake size={18} />
-                    <p className="text-sm font-semibold uppercase tracking-[0.22em]">Daily update</p>
-                  </div>
-                  <h2 className="mt-2 text-2xl font-semibold text-rose-950">Share your day, problems, and mood swings</h2>
-                </div>
-                <span className="rounded-full bg-orange-100 px-4 py-2 text-sm font-semibold text-orange-700">{activeMood}</span>
-              </div>
-
-              <form onSubmit={handleReflectionSubmit} className="space-y-4">
-                <label className="block space-y-2 text-sm font-medium text-stone-700">
-                  Update title
-                  <input
-                    value={reflectionDraft.title}
-                    onChange={(event) => setReflectionDraft((current) => ({ ...current, title: event.target.value }))}
-                    className="w-full rounded-2xl border border-rose-200 bg-white/80 px-4 py-3 outline-none transition focus:border-rose-400"
-                    placeholder="Late afternoon check-in"
-                  />
-                </label>
-                <label className="block space-y-2 text-sm font-medium text-stone-700">
-                  How did your day go?
-                  <textarea
-                    value={reflectionDraft.summary}
-                    onChange={(event) => setReflectionDraft((current) => ({ ...current, summary: event.target.value }))}
-                    className="min-h-[120px] w-full rounded-2xl border border-rose-200 bg-white/80 px-4 py-3 outline-none transition focus:border-rose-400"
-                    placeholder="Share the overall update for your day..."
-                  />
-                </label>
-                <label className="block space-y-2 text-sm font-medium text-stone-700">
-                  Problems or mood swings
-                  <textarea
-                    value={reflectionDraft.problems}
-                    onChange={(event) => setReflectionDraft((current) => ({ ...current, problems: event.target.value }))}
-                    className="min-h-[120px] w-full rounded-2xl border border-rose-200 bg-white/80 px-4 py-3 outline-none transition focus:border-rose-400"
-                    placeholder="Mention triggers, stress, or emotional swings that your partner should understand."
-                  />
-                </label>
-                <label className="block space-y-2 text-sm font-medium text-stone-700">
-                  Current mood
-                  <select
-                    value={reflectionDraft.mood}
-                    onChange={(event) => setReflectionDraft((current) => ({ ...current, mood: event.target.value }))}
-                    className="w-full rounded-2xl border border-rose-200 bg-white/80 px-4 py-3 outline-none transition focus:border-rose-400"
-                  >
-                    {moodOptions.map((mood) => (
-                      <option key={mood} value={mood}>
-                        {mood}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <button type="submit" className="btn-primary w-full">
-                  Save daily update
-                </button>
-              </form>
-
-              <div className="mt-6 space-y-3">
-                {reflections.slice(0, 3).map((reflection) => (
-                  <article key={reflection.id} className="rounded-[24px] border border-white/70 bg-white/75 p-4">
-                    <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-                      <div>
-                        <h3 className="text-lg font-semibold text-rose-950">{reflection.title}</h3>
-                        <p className="text-sm text-stone-500">
-                          {new Date(reflection.createdAt).toLocaleString('en-US', {
-                            month: 'short',
-                            day: 'numeric',
-                            hour: 'numeric',
-                            minute: '2-digit',
-                          })}
-                        </p>
-                      </div>
-                      <span className="rounded-full bg-rose-100 px-3 py-1 text-sm font-semibold text-rose-700">
-                        {reflection.mood}
-                      </span>
-                    </div>
-                    <p className="mt-3 text-sm text-stone-700">{reflection.summary}</p>
-                    <p className="mt-3 border-l-2 border-rose-200 pl-3 text-sm text-stone-600">{reflection.problems}</p>
-                  </article>
-                ))}
-              </div>
-            </div>
-
-            <div className="glass-card p-5 sm:p-6">
-              <div className="mb-5 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-                <div>
-                  <div className="flex items-center gap-2 text-rose-500">
-                    <Sparkles size={18} />
-                    <p className="text-sm font-semibold uppercase tracking-[0.22em]">Relationship tracker</p>
-                  </div>
-                  <h2 className="mt-2 text-2xl font-semibold text-rose-950">Daily score and history</h2>
-                </div>
-                <div className="flex w-full rounded-full bg-rose-100 p-1 sm:w-auto">
-                  <button
-                    type="button"
-                    onClick={() => setView('daily')}
-                    className={`flex-1 rounded-full px-4 py-2 text-sm font-semibold transition sm:flex-none ${
-                      view === 'daily' ? 'bg-white text-rose-700 shadow-sm' : 'text-rose-500'
-                    }`}
-                  >
-                    Daily entry
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setView('history')}
-                    className={`flex flex-1 items-center justify-center gap-2 rounded-full px-4 py-2 text-sm font-semibold transition sm:flex-none ${
-                      view === 'history' ? 'bg-white text-rose-700 shadow-sm' : 'text-rose-500'
-                    }`}
-                  >
-                    <History size={16} />
-                    History
-                  </button>
-                </div>
-              </div>
-
-              {view === 'daily' ? (
-                <div className="space-y-4">
-                  <p className="text-sm text-stone-600">
-                    Keep the existing daily rating flow, now inside a mobile-friendly layout with bigger tap targets.
-                  </p>
-                  <div className="grid gap-4 md:grid-cols-2">
-                    {ratingCategories.map((category) => (
-                      <HeartRating key={category.id} category={category.id} label={category.label} />
-                    ))}
-                  </div>
-                  <textarea
-                    value={comment}
-                    onChange={(event) => setComment(event.target.value)}
-                    placeholder="Add a special comment..."
-                    className="min-h-[120px] w-full rounded-[24px] border border-rose-200 bg-white/80 px-4 py-4 outline-none transition focus:border-rose-400"
-                  />
-                  <button onClick={handleSubmit} disabled={isSubmitting} className="btn-primary w-full">
-                    {isSubmitting ? 'Saving...' : 'Save Entry'}
-                  </button>
-                  {error && <p className="text-center text-sm text-red-500">{error}</p>}
-                </div>
-              ) : (
-                <div className="space-y-4">
-                  {history.length > 0 ? (
-                    history.map((entry) => (
-                      <article key={entry.id} className="rounded-[28px] border border-white/70 bg-white/75 p-5">
-                        <p className="text-sm text-stone-500">
-                          {new Date(entry.created_at).toLocaleDateString('en-US', {
-                            weekday: 'long',
-                            year: 'numeric',
-                            month: 'long',
-                            day: 'numeric',
-                          })}
-                        </p>
-                        <div className="mt-4 grid grid-cols-2 gap-4 text-center sm:grid-cols-3 lg:grid-cols-5">
-                          {ratingCategories.map((category) => (
-                            <div key={category.id} className="rounded-2xl bg-rose-50/90 p-3">
-                              <p className="text-sm font-semibold text-rose-700">{category.label}</p>
-                              <p className="mt-1 text-2xl font-bold text-rose-500">{entry[category.id]}</p>
-                            </div>
-                          ))}
-                        </div>
-                        {entry.comment && (
-                          <p className="mt-4 border-t border-rose-100 pt-4 text-sm italic text-stone-600">{entry.comment}</p>
-                        )}
-                      </article>
-                    ))
+        <section className="glass-card mt-4 p-6">
+          <div className="text-center">
+            <p className="text-[11px] font-bold uppercase tracking-[0.28em] text-rose-300">Send love</p>
+            <div className="relative mx-auto mt-5 h-52 w-52">
+              <div className={`absolute inset-4 rounded-full bg-rose-300/35 blur-2xl transition-all duration-500 ${showHeartPulse ? 'scale-110 opacity-100' : 'scale-75 opacity-0'}`} />
+              <button
+                onClick={handleBeep}
+                disabled={isBeeping || cooldownLeft > 0 || !partnerProfile}
+                className={`primary-romance relative flex h-full w-full items-center justify-center rounded-full transition duration-300 ${showHeartPulse ? 'scale-105' : ''} ${(isBeeping || cooldownLeft > 0 || !partnerProfile) ? 'opacity-70' : 'animate-pulse-soft'}`}
+              >
+                <div className="text-center">
+                  {isBeeping ? (
+                    <Loader2 className="mx-auto h-10 w-10 animate-spin" />
                   ) : (
-                    <div className="rounded-[28px] border border-dashed border-rose-200 bg-white/75 p-8 text-center">
-                      <p className="text-xl font-semibold text-rose-900">No entries yet.</p>
-                      <p className="mt-2 text-sm text-stone-600">Submit your first daily entry to start building your history.</p>
-                    </div>
+                    <>
+                      <HeartIcon className="mx-auto h-20 w-20" fill="white" />
+                      <div className="mt-3 text-xl font-extrabold">Send Beep 🐝</div>
+                    </>
                   )}
                 </div>
-              )}
+              </button>
             </div>
+            <p className="mt-4 text-sm font-semibold text-stone-600">
+              {!partnerProfile
+                ? 'Connect with your partner to start sending beeps.'
+                : cooldownLeft > 0
+                  ? `Give it ${Math.ceil(cooldownLeft / 1000)}s before the next one.`
+                  : 'A quick tap sends a warm little nudge.'}
+            </p>
+          </div>
 
-            <div className="glass-card p-5 sm:p-6">
-              <div className="mb-4 flex items-center gap-2 text-rose-500">
-                <BellRing size={18} />
-                <p className="text-sm font-semibold uppercase tracking-[0.22em]">Alert center</p>
+          <div className="mt-5 grid grid-cols-2 gap-2">
+            {MESSAGES.map((msg) => (
+              <button
+                key={msg}
+                onClick={() => setSelectedMessage(msg)}
+                className={`${selectedMessage === msg ? 'primary-romance' : 'secondary-romance'} rounded-[20px] px-3 py-3 text-sm font-semibold transition duration-300`}
+              >
+                {msg}
+              </button>
+            ))}
+          </div>
+        </section>
+
+        <section className="mt-4">
+          <div className="mb-3 flex items-center justify-between px-1">
+            <p className="text-[11px] font-bold uppercase tracking-[0.28em] text-rose-300">Quick actions</p>
+            <p className="text-xs font-semibold text-stone-500">{userProfile?.name || authUser?.email || 'You'}</p>
+          </div>
+          <div className="grid grid-cols-3 gap-3">
+            {[
+              { label: 'Chat 💬', href: '/chat', Icon: MessageCircle, tint: 'bg-rose-100 text-rose-500' },
+              { label: 'Mood 🌙', href: '/ratings', Icon: MoonStar, tint: 'bg-violet-100 text-violet-500' },
+              { label: 'Games 🎮', href: '/games', Icon: Gamepad2, tint: 'bg-amber-100 text-amber-500' },
+            ].map(({ label, href, Icon, tint }) => (
+              <button key={label} onClick={() => router.push(href)} className="glass-card flex flex-col items-center gap-3 p-4 text-center transition duration-300 active:scale-[0.98]">
+                <div className={`flex h-12 w-12 items-center justify-center rounded-[18px] ${tint}`}>
+                  <Icon size={20} />
+                </div>
+                <span className="text-sm font-bold text-stone-700">{label}</span>
+              </button>
+            ))}
+          </div>
+        </section>
+
+        <section className="mt-4 space-y-3">
+          <div className="px-1">
+            <p className="text-[11px] font-bold uppercase tracking-[0.28em] text-rose-300">Recent moments</p>
+          </div>
+          {beeps.length === 0 ? (
+            <div className="glass-card p-5 text-sm font-medium text-stone-500">Your shared history will show up here once the first beep lands.</div>
+          ) : (
+            beeps.slice(0, 4).map((beep, index) => (
+              <div key={beep.id} className="glass-card flex items-start gap-4 p-4 animate-pop-in" style={{ animationDelay: `${index * 50}ms` }}>
+                <div className={`mt-1 flex h-10 w-10 items-center justify-center rounded-[16px] ${beep.sender_id === authUser?.id ? 'bg-rose-100 text-rose-500' : 'bg-violet-100 text-violet-500'}`}>
+                  <Heart size={16} fill="currentColor" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-bold text-stone-700">{beep.sender_id === authUser?.id ? 'You sent' : `${partnerProfile?.name || 'Partner'} sent`}</p>
+                  <p className="mt-1 text-sm font-medium text-stone-600">{beep.message}</p>
+                  <p className="mt-2 text-[11px] font-semibold uppercase tracking-[0.22em] text-stone-400">
+                    {new Date(beep.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                  </p>
+                </div>
               </div>
-              <h2 className="text-2xl font-semibold text-rose-950">Recent attention activity</h2>
-              <div className="mt-5 space-y-3">
-                {attentionAlerts.map((alert) => (
-                  <article key={alert.id} className="rounded-[24px] border border-white/70 bg-white/80 p-4">
-                    <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
-                      <h3 className="font-semibold text-rose-950">{alert.title}</h3>
-                      <span className="text-xs font-medium uppercase tracking-[0.2em] text-stone-400">
-                        {new Date(alert.createdAt).toLocaleTimeString('en-US', {
-                          hour: 'numeric',
-                          minute: '2-digit',
-                        })}
-                      </span>
-                    </div>
-                    <p className="mt-2 text-sm text-stone-600">{alert.message}</p>
-                  </article>
-                ))}
-              </div>
-            </div>
-          </section>
-        </main>
-      </div>
+            ))
+          )}
+        </section>
+      </main>
+
+      {error && (
+        <div className="fixed bottom-[calc(env(safe-area-inset-bottom)+95px)] left-1/2 z-50 w-[88%] max-w-sm -translate-x-1/2">
+          <div className="rounded-[24px] bg-stone-900/88 px-5 py-4 text-center text-sm font-semibold text-white shadow-2xl backdrop-blur-xl">
+            {error}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

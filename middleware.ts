@@ -8,7 +8,15 @@ function isValidUrl(value: string | undefined) {
   }
 
   try {
-    const url = new URL(value)
+    const raw = value.trim()
+    const unwrapped =
+      (raw.startsWith('`') && raw.endsWith('`')) ||
+      (raw.startsWith('"') && raw.endsWith('"')) ||
+      (raw.startsWith("'") && raw.endsWith("'"))
+        ? raw.slice(1, -1)
+        : raw
+    const normalized = unwrapped.includes('://') ? unwrapped : `https://${unwrapped}`
+    const url = new URL(normalized)
     return url.protocol === 'http:' || url.protocol === 'https:'
   } catch {
     return false
@@ -24,6 +32,28 @@ function hasSupabaseEnv() {
 
 export async function middleware(request: NextRequest) {
   try {
+    const path = request.nextUrl.pathname
+
+    if (path.startsWith('/api/')) {
+      return NextResponse.next()
+    }
+
+    const isPublicAsset =
+      path === '/manifest.json' ||
+      path === '/.well-known/assetlinks.json' ||
+      path === '/sw.js' ||
+      path === '/push-sw.js' ||
+      path === '/workbox-4754cb34.js' ||
+      path.startsWith('/icon') ||
+      path.startsWith('/apple-touch-icon') ||
+      path.startsWith('/logo') ||
+      path.startsWith('/bg.') ||
+      path.startsWith('/vite.svg')
+
+    if (isPublicAsset) {
+      return NextResponse.next()
+    }
+
     if (!hasSupabaseEnv()) {
       // Skip middleware if Supabase is not configured
       return NextResponse.next()
@@ -81,7 +111,21 @@ export async function middleware(request: NextRequest) {
       }
     )
 
-    await supabase.auth.getSession()
+    const { data: { session } } = await supabase.auth.getSession()
+
+    const isAuthPage = path.startsWith('/signin') ||
+                      path.startsWith('/signup') ||
+                      path.startsWith('/auth')
+
+    const isPublicPage = path === '/'
+
+    if (!session && !isAuthPage && !isPublicPage) {
+      return NextResponse.redirect(new URL('/signin', request.url))
+    }
+
+    if (session && isAuthPage) {
+      return NextResponse.redirect(new URL('/app', request.url))
+    }
 
     return response
   } catch (error) {
@@ -100,6 +144,6 @@ export const config = {
      * - favicon.ico (favicon file)
      * Feel free to modify this pattern to include more paths.
      */
-    '/((?!_next/static|_next/image|favicon.ico).*)',
+    '/((?!_next/static|_next/image|favicon.ico|manifest.json|sw.js|push-sw.js|workbox-.*|icon.*|apple-touch-icon.*|logo.*|bg.jpg|vite.svg).*)',
   ],
 }

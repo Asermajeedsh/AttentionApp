@@ -1,47 +1,33 @@
 {
-  "name": "Attention App",
-  "short_name": "Attention",
-  "description": "A private couple communication PWA for beeps, chat, moods, calls, ratings, and games.",
+  "name": "Pulse",
+  "short_name": "Pulse",
+  "description": "A private emotional connection app for couples.",
   "start_url": "/signin",
   "scope": "/",
   "display": "standalone",
-  "background_color": "#fff8f6",
-  "theme_color": "#fff8f6",
+  "background_color": "#fff8f4",
+  "theme_color": "#fff8f4",
   "orientation": "portrait",
   "icons": [
     {
-      "src": "/icon-192x192.png",
-      "sizes": "192x192",
-      "type": "image/png",
-      "purpose": "any maskable"
-    },
-    {
-      "src": "/icon-512x512.png",
-      "sizes": "512x512",
-      "type": "image/png",
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
       "purpose": "any maskable"
     }
   ],
   "shortcuts": [
     {
-      "name": "Send Beep",
-      "short_name": "Beep",
-      "url": "/app",
-      "icons": [{ "src": "/icon-192x192.png", "sizes": "192x192" }]
+      "name": "Send Pulse",
+      "short_name": "Pulse",
+      "url": "/app"
     },
     {
-      "name": "Chat",
-      "short_name": "Chat",
-      "url": "/chat",
-      "icons": [{ "src": "/icon-192x192.png", "sizes": "192x192" }]
-    },
-    {
-      "name": "Games",
-      "short_name": "Games",
-      "url": "/games",
-      "icons": [{ "src": "/icon-192x192.png", "sizes": "192x192" }]
+      "name": "Mood",
+      "short_name": "Mood",
+      "url": "/mood"
     }
   ],
-  "categories": ["lifestyle", "social"],
+  "categories": ["lifestyle"],
   "lang": "en"
 }

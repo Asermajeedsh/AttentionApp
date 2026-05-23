@@ -7,7 +7,8 @@ function has(value: string | undefined) {
 export async function GET() {
   const missingRequired: string[] = []
 
-  if (!has(process.env.NEXT_PUBLIC_SUPABASE_URL)) missingRequired.push('NEXT_PUBLIC_SUPABASE_URL')
+  const hasSupabaseUrl = has(process.env.NEXT_PUBLIC_SUPABASE_URL) || has(process.env.NEXT_PUBLIC_SUPABASE_PROJECT_REF)
+  if (!hasSupabaseUrl) missingRequired.push('NEXT_PUBLIC_SUPABASE_URL (or NEXT_PUBLIC_SUPABASE_PROJECT_REF)')
   if (!has(process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY)) missingRequired.push('NEXT_PUBLIC_SUPABASE_ANON_KEY')
   if (!has(process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY)) missingRequired.push('NEXT_PUBLIC_VAPID_PUBLIC_KEY')
   if (!has(process.env.VAPID_PRIVATE_KEY)) missingRequired.push('VAPID_PRIVATE_KEY')
@@ -15,7 +16,8 @@ export async function GET() {
   const missingRecommended: string[] = []
   if (!has(process.env.VAPID_SUBJECT)) missingRecommended.push('VAPID_SUBJECT')
   if (!has(process.env.SUPABASE_SERVICE_ROLE_KEY)) missingRecommended.push('SUPABASE_SERVICE_ROLE_KEY')
-  if (!has(process.env.NEXT_PUBLIC_WEBRTC_ICE_SERVERS)) missingRecommended.push('NEXT_PUBLIC_WEBRTC_ICE_SERVERS')
+  if (!has(process.env.TWILIO_ACCOUNT_SID)) missingRecommended.push('TWILIO_ACCOUNT_SID')
+  if (!has(process.env.TWILIO_AUTH_TOKEN)) missingRecommended.push('TWILIO_AUTH_TOKEN')
 
   return NextResponse.json({
     ok: missingRequired.length === 0,
@@ -23,4 +25,3 @@ export async function GET() {
     missingRecommended,
   })
 }
-

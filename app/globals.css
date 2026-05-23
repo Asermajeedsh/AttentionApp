@@ -3,40 +3,28 @@
 @tailwind utilities;
 
 :root {
-  --bg-cream: #fff8f6;
-  --bg-blush: #ffe8ef;
-  --bg-lavender: #f1e9ff;
-  --bg-peach: #ffeede;
-  --text-main: #4b3648;
-  --text-soft: #826a7e;
-  --line-soft: rgba(255, 255, 255, 0.7);
-  --shadow-romance: 0 22px 60px rgba(217, 144, 174, 0.22);
+  --pulse-ink: #4b3445;
+  --pulse-muted: #977a8f;
+  --pulse-pink: #ef6fa5;
+  --pulse-violet: #b892ff;
+  --pulse-cream: #fff8f4;
 }
 
 @layer base {
   html {
+    min-height: 100%;
     scroll-behavior: smooth;
     -webkit-tap-highlight-color: transparent;
-    @apply h-full;
   }
 
   body {
     min-height: 100%;
-    color: var(--text-main);
-    background:
-      radial-gradient(circle at top left, rgba(255, 210, 228, 0.9), transparent 34%),
-      radial-gradient(circle at top right, rgba(236, 223, 255, 0.85), transparent 32%),
-      linear-gradient(180deg, var(--bg-cream) 0%, #fff8fb 42%, #fff4ef 100%);
-    font-family: "Avenir Next", "Nunito Sans", "Segoe UI", sans-serif;
-    @apply antialiased selection:bg-rose-200/70;
-  }
-
-  h1,
-  h2,
-  h3,
-  h4 {
-    font-family: "Avenir Next", "Trebuchet MS", sans-serif;
+    margin: 0;
+    color: var(--pulse-ink);
+    font-family: Inter, "Plus Jakarta Sans", Poppins, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     letter-spacing: 0;
+    background: var(--pulse-cream);
+    @apply antialiased selection:bg-pink-200/70;
   }
 
   button,
@@ -47,131 +35,30 @@
 }
 
 @layer components {
-  .app-shell {
-    @apply relative mx-auto flex h-full w-full max-w-md flex-col overflow-hidden;
+  .bg-pulse {
+    background:
+      linear-gradient(180deg, rgba(255, 248, 244, 0.96), rgba(255, 242, 248, 0.96) 52%, rgba(255, 246, 237, 0.98)),
+      #fff8f4;
   }
 
-  .glass-card {
-    background: linear-gradient(180deg, rgba(255, 255, 255, 0.82), rgba(255, 255, 255, 0.6));
-    border: 1px solid var(--line-soft);
-    box-shadow: var(--shadow-romance);
+  .pulse-card {
+    border: 1px solid rgba(255, 255, 255, 0.68);
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.72), rgba(255, 255, 255, 0.46));
+    box-shadow: 0 24px 70px rgba(218, 137, 172, 0.22);
     @apply rounded-[30px] backdrop-blur-2xl;
   }
 
-  .glass-button {
-    background: rgba(255, 255, 255, 0.62);
-    border: 1px solid rgba(255, 255, 255, 0.7);
-    @apply rounded-[22px] shadow-lg shadow-rose-100/30 backdrop-blur-xl transition duration-300 active:scale-[0.98];
+  .pulse-primary-button {
+    background: linear-gradient(135deg, #ff7ca8 0%, #ef6fa5 52%, #b892ff 100%);
+    box-shadow: 0 18px 42px rgba(239, 111, 165, 0.34);
+    @apply inline-flex h-12 items-center gap-2 rounded-2xl px-5 text-sm font-black text-white transition active:scale-95 disabled:opacity-50;
   }
 
-  .gradient-rose {
-    background-image: linear-gradient(135deg, #f889a7 0%, #ec6f9d 48%, #c98cf5 100%);
-    box-shadow: 0 20px 45px rgba(236, 111, 157, 0.34);
+  .pulse-soft-button {
+    @apply inline-flex h-12 items-center gap-2 rounded-2xl border border-white/65 bg-white/55 px-4 text-sm font-black text-[#76566b] shadow-lg shadow-pink-100/30 backdrop-blur-xl transition active:scale-95 disabled:opacity-50;
   }
 
-  .primary-romance {
-    background-image: linear-gradient(135deg, #f889a7 0%, #ec6f9d 48%, #c98cf5 100%);
-    box-shadow: 0 20px 45px rgba(236, 111, 157, 0.34);
-    @apply text-white;
-  }
-
-  .secondary-romance {
-    background: linear-gradient(180deg, rgba(255, 255, 255, 0.72), rgba(255, 255, 255, 0.5));
-    border: 1px solid rgba(255, 255, 255, 0.76);
-    @apply text-stone-700;
-  }
-}
-
-@layer utilities {
-  .no-scrollbar::-webkit-scrollbar {
-    display: none;
-  }
-
-  .no-scrollbar {
-    -ms-overflow-style: none;
-    scrollbar-width: none;
-  }
-
-  .text-gradient {
-    background: linear-gradient(135deg, #e76093 0%, #d174c6 100%);
-    -webkit-background-clip: text;
-    background-clip: text;
-    color: transparent;
-  }
-
-  .bg-mesh {
-    background:
-      radial-gradient(circle at top left, rgba(255, 206, 223, 0.95), transparent 30%),
-      radial-gradient(circle at top right, rgba(232, 220, 255, 0.92), transparent 32%),
-      radial-gradient(circle at bottom center, rgba(255, 235, 220, 0.94), transparent 30%),
-      linear-gradient(180deg, #fff8f7 0%, #fff7fb 52%, #fff6f0 100%);
-  }
-
-  .animate-float {
-    animation: float 5s ease-in-out infinite;
-  }
-
-  .animate-pulse-soft {
-    animation: pulse-soft 2.7s ease-in-out infinite;
-  }
-
-  .animate-heart-float {
-    animation: heart-float 2.8s ease-out forwards;
-  }
-
-  .animate-heart-rise {
-    animation: heart-rise var(--dur, 3.5s) ease-out forwards;
-    animation-delay: var(--delay, 0s);
-  }
-
-  .animate-pop-in {
-    animation: pop-in 320ms ease-out;
-  }
-
-  .animate-shimmer {
-    animation: shimmer 2.2s linear infinite;
-    background-size: 200% 100%;
-  }
-
-  .animate-countdown {
-    animation: countdown 1s ease-in-out infinite;
-  }
-
-  @keyframes float {
-    0%, 100% { transform: translateY(0px); }
-    50% { transform: translateY(-8px); }
-  }
-
-  @keyframes pulse-soft {
-    0%, 100% { transform: scale(1); opacity: 1; }
-    50% { transform: scale(1.03); opacity: 0.86; }
-  }
-
-  @keyframes heart-float {
-    0% { transform: translateY(0) scale(0.6); opacity: 0; }
-    20% { transform: translateY(-18px) scale(1); opacity: 1; }
-    100% { transform: translateY(-118px) scale(0.84); opacity: 0; }
-  }
-
-  @keyframes heart-rise {
-    0% { transform: translate3d(var(--x0, 0), 0, 0) scale(0.7); opacity: 0; }
-    12% { opacity: 1; }
-    100% { transform: translate3d(var(--x1, 0), -112vh, 0) scale(1.06); opacity: 0; }
-  }
-
-  @keyframes pop-in {
-    0% { transform: scale(0.94); opacity: 0; }
-    100% { transform: scale(1); opacity: 1; }
-  }
-
-  @keyframes shimmer {
-    0% { background-position: 200% 0; }
-    100% { background-position: -200% 0; }
-  }
-
-  @keyframes countdown {
-    0% { transform: scale(0.8); opacity: 0.45; }
-    40% { transform: scale(1.1); opacity: 1; }
-    100% { transform: scale(0.92); opacity: 0.82; }
+  .pulse-icon-button {
+    @apply grid h-12 w-12 place-items-center rounded-2xl bg-gradient-to-br from-pink-500 to-violet-500 text-white shadow-lg shadow-pink-200/50 transition active:scale-95 disabled:opacity-50;
   }
 }

@@ -9,7 +9,7 @@ export async function GET(request: NextRequest) {
   const code = requestUrl.searchParams.get('code')
 
   if (code) {
-    const cookieStore = cookies()
+    const cookieStore = await cookies()
     const supabase = createServerClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
@@ -43,10 +43,13 @@ export async function GET(request: NextRequest) {
         .maybeSingle();
 
       if (!profile) {
-        const { count } = await supabase.from('users').select('id', { count: 'exact', head: true });
-        const role = count === 0 ? 'me' : 'partner';
-        const name = session.user.user_metadata.full_name || email?.split('@')[0] || 'Partner';
-        await supabase.from('users').insert([{ id: session.user.id, email, role, name }]);
+        const name = session.user.user_metadata.full_name || email?.split('@')[0] || 'Love';
+        await supabase.from('users').insert([{
+          id: session.user.id,
+          email,
+          display_name: name,
+          onboarding_complete: true,
+        }]);
       }
     }
   }

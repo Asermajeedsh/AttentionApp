@@ -1,8 +1,8 @@
 import { createOptionalClient } from '../../utils/supabase/server'
 import PulseExperience from '../../components/pulse/PulseExperience'
 
-export default async function SettingsPage() {
+export default async function MoodPage() {
   const supabase = await createOptionalClient()
   const { data } = supabase ? await supabase.auth.getUser() : { data: { user: null } }
-  return <PulseExperience user={data.user} mode="settings" />
+  return <PulseExperience user={data.user} mode="mood" />
 }

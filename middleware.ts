@@ -24,8 +24,13 @@ function isValidUrl(value: string | undefined) {
 }
 
 function hasSupabaseEnv() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL || (
+    process.env.NEXT_PUBLIC_SUPABASE_PROJECT_REF
+      ? `https://${process.env.NEXT_PUBLIC_SUPABASE_PROJECT_REF}.supabase.co`
+      : undefined
+  )
   return (
-    isValidUrl(process.env.NEXT_PUBLIC_SUPABASE_URL) &&
+    isValidUrl(url) &&
     Boolean(process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY)
   )
 }
@@ -66,7 +71,7 @@ export async function middleware(request: NextRequest) {
     })
 
     const supabase = createServerClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_URL || `https://${process.env.NEXT_PUBLIC_SUPABASE_PROJECT_REF}.supabase.co`,
       process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
       {
         cookies: {

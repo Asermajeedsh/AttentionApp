@@ -31,59 +31,49 @@ async function sendWithRetry(subscription: any, payload: string) {
   return { ok: false as const, err: new Error('Unknown send failure') }
 }
 
-export async function POST(req: Request) {
+export async function POST() {
   try {
-    const cookieStore = cookies()
-    const supabase = createServerClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-      {
-        cookies: {
-          get(name: string) {
-            return cookieStore.get(name)?.value
-          },
-          set(name: string, value: string, options: CookieOptions) {
-            cookieStore.set({ name, value, ...options })
-          },
-          remove(name: string, options: CookieOptions) {
-            cookieStore.set({ name, value: '', ...options })
-          },
+    const cookieStore = await cookies()
+    const supabase = createServerClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!, {
+      cookies: {
+        get(name: string) {
+          return cookieStore.get(name)?.value
         },
-      }
-    )
+        set(name: string, value: string, options: CookieOptions) {
+          cookieStore.set({ name, value, ...options })
+        },
+        remove(name: string, options: CookieOptions) {
+          cookieStore.set({ name, value: '', ...options })
+        },
+      },
+    })
 
-    const { data: userData, error: userError } = await supabase.auth.getUser()
-    if (userError || !userData.user) {
-      return NextResponse.json({ ok: false, error: 'Unauthorized' }, { status: 401 })
-    }
+    const { data: auth } = await supabase.auth.getUser()
+    if (!auth.user) return NextResponse.json({ ok: false, error: 'Unauthorized' }, { status: 401 })
 
     const { data: subs, error: subError } = await supabase
       .from('push_subscriptions')
       .select('id, subscription')
-      .eq('user_id', userData.user.id)
+      .eq('user_id', auth.user.id)
       .order('last_seen_at', { ascending: false })
 
     if (subError || !subs || subs.length === 0) {
       return NextResponse.json({ ok: false, error: 'No push subscription found' }, { status: 200 })
     }
 
-    webpush.setVapidDetails(
-      process.env.VAPID_SUBJECT || 'mailto:founder@valiorstudios.com',
-      getEnv('NEXT_PUBLIC_VAPID_PUBLIC_KEY'),
-      getEnv('VAPID_PRIVATE_KEY')
-    )
+    webpush.setVapidDetails(process.env.VAPID_SUBJECT || 'mailto:founder@valiorstudios.com', getEnv('NEXT_PUBLIC_VAPID_PUBLIC_KEY'), getEnv('VAPID_PRIVATE_KEY'))
 
     const now = new Date()
     const id = `test:${now.getTime()}`
     const payload = JSON.stringify({
-      title: 'Test notification ✅',
-      body: `Sent at ${now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`,
+      title: 'A little love just arrived 💗',
+      body: `Test sent at ${now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`,
       icon: '/apple-touch-icon.png',
       badge: '/apple-touch-icon.png',
-      type: 'reminder',
+      type: 'beep',
       id,
       tag: id,
-      data: { url: '/settings', type: 'reminder', id, tag: id, badgeIncrement: 1 },
+      data: { url: '/settings', type: 'beep', id, tag: id, badgeIncrement: 1 },
     })
 
     let sent = 0

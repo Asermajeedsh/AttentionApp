@@ -5,11 +5,12 @@ export async function GET() {
   if (!key) {
     return NextResponse.json({ ok: false, error: 'Missing VAPID public key' }, { status: 500 })
   }
+
   return NextResponse.json(
     { ok: true, key },
     {
       headers: {
-        'cache-control': 'public, max-age=300, stale-while-revalidate=3600',
+        'cache-control': 'public, max-age=60, stale-while-revalidate=600',
       },
     }
   )

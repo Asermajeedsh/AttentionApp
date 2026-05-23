@@ -1,25 +1,21 @@
 import './globals.css'
 import type { Metadata, Viewport } from 'next'
 import BottomNav from './BottomNav'
-import PushClientBridge from './PushClientBridge'
 
 export const metadata: Metadata = {
-  title: 'Attention App',
-  applicationName: 'Attention App',
-  description: 'A private space for you and your partner',
+  title: 'Pulse',
+  applicationName: 'Pulse',
+  description: 'A private emotional connection app for two people.',
   manifest: '/manifest.json',
   icons: {
-    icon: '/apple-touch-icon.png',
-    apple: [
-      { url: '/apple-touch-icon.png', sizes: '180x180' },
-      { url: '/apple-touch-icon.png' },
-    ],
+    icon: '/icon.svg',
+    apple: [{ url: '/icon.svg' }],
   },
   appleWebApp: {
     capable: true,
     statusBarStyle: 'default',
-    title: 'Attention App'
-  }
+    title: 'Pulse',
+  },
 }
 
 export const viewport: Viewport = {
@@ -28,18 +24,13 @@ export const viewport: Viewport = {
   maximumScale: 1,
   userScalable: false,
   viewportFit: 'cover',
-  themeColor: '#fff8f6',
+  themeColor: '#fff8f4',
 }
 
-export default function RootLayout({
-  children,
-}: {
-  children: React.ReactNode
-}) {
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className="h-full">
-      <body className="h-full">
-        <PushClientBridge />
+    <html lang="en" className="min-h-full">
+      <body className="min-h-full">
         {children}
         <BottomNav />
       </body>
